@@ -92,12 +92,12 @@ class ClawdOverlayService: Service() {
     fun setPetMood(mood:String){status.text="心情：$mood";refreshVisual()}
     fun setPetAction(action:String){status.text="动作：$action";refreshVisual()}
 
-    fun showMcpSpeech(text:String,seconds:Int=10){
+    fun showMcpSpeech(msg:String,seconds:Int=10){
         if(!::petRoot.isInitialized)return
         bubbleRoot?.let{remove(it)}
         val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(16,12,16,12);background=bg(Color.argb(248,255,249,252),30f)}
         root.addView(TextView(this).apply{text="Clawd";textSize=11f;setTextColor(Color.rgb(210,125,157))})
-        root.addView(TextView(this).apply{text=text;textSize=14f;setTextColor(Color.rgb(82,63,73));setPadding(0,5,0,0)})
+        root.addView(TextView(this).apply{text=msg;textSize=14f;setTextColor(Color.rgb(82,63,73));setPadding(0,5,0,0)})
         root.setOnClickListener{remove(root)}
         addOverlay(root,250,120);bubbleRoot=root
         main.postDelayed({if(bubbleRoot===root){remove(root);bubbleRoot=null}},seconds.coerceIn(2,60)*1000L)
