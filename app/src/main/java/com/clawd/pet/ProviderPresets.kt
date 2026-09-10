@@ -11,7 +11,7 @@ data class ProviderPreset(
 
 object ProviderPresets {
     val chat=listOf(
-        ProviderPreset("anthropic","Anthropic / Claude","https://api.anthropic.com/v1","claude-sonnet-4-20250514","Anthropic 官方 API；需用 x-api-key 而非 Bearer",false),
+        ProviderPreset("anthropic","Anthropic / Claude","https://api.anthropic.com/v1","claude-sonnet-4-20250514","Anthropic Claude 系列；中转站用户填中转地址即可",true),
         ProviderPreset("openai","OpenAI","https://api.openai.com/v1","gpt-4.1","OpenAI 官方 OpenAI-compatible Chat Completions"),
         ProviderPreset("gemini","Google Gemini","https://generativelanguage.googleapis.com/v1beta/openai/","gemini-3.8-flash","Google 官方 OpenAI compatibility",true),
         ProviderPreset("deepseek","DeepSeek","https://api.deepseek.com","deepseek-v4-flash","DeepSeek 官方 OpenAI-compatible API"),

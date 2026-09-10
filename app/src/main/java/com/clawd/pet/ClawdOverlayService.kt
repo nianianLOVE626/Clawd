@@ -198,8 +198,8 @@ class ClawdOverlayService : Service() {
                     appendBubble(list, "assistant", reply)
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                     send.isEnabled = true
-                    // 桌宠头上弹小气泡
-                    showReplyBubble(reply)
+                    // 桌宠头上弹小气泡（仅面板关闭时）
+                    if (chatRoot == null) showReplyBubble(reply)
                 }
             }
         }

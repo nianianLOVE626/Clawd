@@ -26,41 +26,19 @@ object ChatApi {
         if (base.isBlank()) return Result.failure(IllegalStateException("还没有填写 API URL"))
         if (AppState.apiKey.isBlank()) return Result.failure(IllegalStateException("还没有填写 API Key"))
         if (AppState.model.isBlank()) return Result.failure(IllegalStateException("还没有填写模型"))
-        val endpoint = when (AppState.chatProvider) {
-            "anthropic" -> if (base.endsWith("/messages")) base else "$base/messages"
-            else -> if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
+        val endpoint = if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
+        val messages = JSONArray().put(JSONObject().put("role", "system").put("content", system))
+        history.takeLast(12).forEach { m ->
+            if (m.text.isNotBlank() && (m.role == "user" || m.role == "assistant"))
+                messages.put(JSONObject().put("role", m.role).put("content", m.text))
         }
-        val body = when (AppState.chatProvider) {
-            "anthropic" -> {
-                val msgs = org.json.JSONArray()
-                history.takeLast(12).forEach { m ->
-                    if (m.text.isNotBlank() && (m.role == "user" || m.role == "assistant"))
-                        msgs.put(JSONObject().put("role", m.role).put("content", m.text))
-                }
-                msgs.put(JSONObject().put("role", "user").put("content", userText))
-                JSONObject().put("model", AppState.model).put("max_tokens", 2048)
-                    .put("system", system).put("messages", msgs)
-            }
-            else -> {
-                val messages = JSONArray().put(JSONObject().put("role", "system").put("content", system))
-                history.takeLast(12).forEach { m ->
-                    if (m.text.isNotBlank() && (m.role == "user" || m.role == "assistant"))
-                        messages.put(JSONObject().put("role", m.role).put("content", m.text))
-                }
-                messages.put(JSONObject().put("role", "user").put("content", userText))
-                JSONObject().put("model", AppState.model).put("messages", messages).put("stream", false)
-            }
-        }
+        messages.put(JSONObject().put("role", "user").put("content", userText))
+        val body = JSONObject().put("model", AppState.model).put("messages", messages).put("stream", false)
         return runCatching {
             val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"; connectTimeout = 12000; readTimeout = 60000; doOutput = true
                 setRequestProperty("Content-Type", "application/json")
-                if (AppState.chatProvider == "anthropic") {
-                    setRequestProperty("x-api-key", AppState.apiKey)
-                    setRequestProperty("anthropic-version", "2023-06-01")
-                } else {
-                    setRequestProperty("Authorization", "Bearer ${AppState.apiKey}")
-                }
+                setRequestProperty("Authorization", "Bearer ${AppState.apiKey}")
             }
             conn.outputStream.use { it.write(body.toString().toByteArray(StandardCharsets.UTF_8)) }
             val code = conn.responseCode
@@ -68,16 +46,8 @@ object ChatApi {
             val raw = stream?.bufferedReader()?.use { it.readText() } ?: ""
             if (code !in 200..299) error("聊天 API HTTP $code：${raw.take(900)}")
             val json = JSONObject(raw)
-            val content = when (AppState.chatProvider) {
-                "anthropic" -> {
-                    val arr = json.optJSONArray("content")
-                    arr?.optJSONObject(0)?.optString("text", "") ?: ""
-                }
-                else -> {
-                    val msg = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
-                    msg?.optString("content", "") ?: ""
-                }
-            }
+            val msg = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
+            val content = msg?.optString("content", "") ?: ""
             if (content.isBlank()) error("模型没有返回内容")
 
             val (prompt, cached) = extractCacheTokens(json)
