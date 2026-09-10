@@ -267,7 +267,7 @@ class ClawdOverlayService : Service() {
             maxW, WindowManager.LayoutParams.WRAP_CONTENT, type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; x = (50 * density).toInt(); y = (60 * density).toInt() }
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = (20 * density).toInt(); y = (240 * density).toInt() }
 
         wm.addView(root, lp)
         replyBubble = root
