@@ -77,8 +77,8 @@ class MainActivity:ComponentActivity(){
                     }
                     Spacer(Modifier.height(12.dp));Card(shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(Color.White.copy(.9f))){Column(Modifier.padding(18.dp)){Text("语音",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Ink);Text("Operit 决定说什么，Clawd 负责播放声音。",fontSize=12.sp,color=Ink.copy(.62f));ProviderPicker(ttsProvider){ttsProvider=it;AppState.ttsProvider=it};Field("Voice API URL",ttsUrl,editable=true){ttsUrl=it;AppState.ttsUrl=it};Field("Voice API Key",ttsKey,true,editable=true){ttsKey=it;AppState.ttsKey=it};Field("Voice Model",ttsModel,editable=true){ttsModel=it;AppState.ttsModel=it};Field("voice_id",voiceId,editable=true){voiceId=it;AppState.voiceId=it};Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("启用语音");Switch(checked=ttsEnabled,onCheckedChange={ttsEnabled=it;AppState.ttsEnabled=it})}}
                     }
-                    Spacer(Modifier.height(10.dp));Text("连接：Operit AI → Clawd MCP → 虚拟形象。
-如果 Operit 与 Clawd 在同一手机上，请优先测试本机回环地址；如果 Operit 使用独立网络环境，再测试局域网地址。",fontSize=11.sp,color=Ink.copy(.55f))
+                    Spacer(Modifier.height(10.dp));Text("连接：Operit AI → Clawd MCP → 虚拟形象。" +
+                    "如果 Operit 与 Clawd 在同一手机上，请优先测试本机回环地址；如果 Operit 使用独立网络环境，再测试局域网地址。",fontSize=11.sp,color=Ink.copy(.55f))
                 }
             }
         }

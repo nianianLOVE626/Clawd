@@ -195,7 +195,6 @@ class ClawdOverlayService: Service() {
         val input = EditText(this).apply {
             hint="和 Clawd 说点什么…"
             textSize=14f
-            singleLine=false
             maxLines=3
             setPadding(dp(12f),dp(8f),dp(12f),dp(8f))
             background=bg(Color.argb(220,255,255,255),24f)
@@ -285,7 +284,7 @@ class ClawdOverlayService: Service() {
     }
 
     override fun onDestroy(){
-        if(::petRoot.isInitialized)remove(petRoot);bubbleRoot=null;chatRoot=null;ClawdPetController.detach(this);ClawdMcpServer.stop();super.onDestroy()
+        if(::petRoot.isInitialized)runCatching{wm.removeView(petRoot)};bubbleRoot=null;chatRoot=null;ClawdPetController.detach(this);ClawdMcpServer.stop();super.onDestroy()
     }
     override fun onBind(intent:Intent?)=null
 }
