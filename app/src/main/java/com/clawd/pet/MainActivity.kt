@@ -12,7 +12,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -41,7 +43,7 @@ class MainActivity:ComponentActivity(){
         var ttsProvider by remember{mutableStateOf(AppState.ttsProvider)};var ttsUrl by remember{mutableStateOf(AppState.ttsUrl)};var ttsKey by remember{mutableStateOf(AppState.ttsKey)};var ttsModel by remember{mutableStateOf(AppState.ttsModel)};var voiceId by remember{mutableStateOf(AppState.voiceId)};var ttsEnabled by remember{mutableStateOf(AppState.ttsEnabled)}
         MaterialTheme(colorScheme=lightColorScheme(primary=Rose,background=Cream,onBackground=Ink)){
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Cream,Lilac)))){
-                Column(Modifier.fillMaxSize().padding(20.dp)){Text("Clawd",fontSize=34.sp,fontWeight=FontWeight.Bold,color=Ink);Text("Operit AI 的虚拟身体",fontSize=15.sp,color=Rose);Spacer(Modifier.height(16.dp))
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)){Text("Clawd",fontSize=34.sp,fontWeight=FontWeight.Bold,color=Ink);Text("Operit AI 的虚拟身体",fontSize=15.sp,color=Rose);Spacer(Modifier.height(16.dp))
                     Card(shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(Color.White.copy(.9f))){Column(Modifier.padding(18.dp)){Text("虚拟形象",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Ink);Text("支持一张默认形象，也可以为不同状态分别上传图片。",fontSize=12.sp,color=Ink.copy(.62f));Spacer(Modifier.height(8.dp));ImageButton("默认 / 待机",AppState.petImageUri){pick("default")};ImageButton("开心",AppState.petHappyUri){pick("happy")};ImageButton("难过",AppState.petSadUri){pick("sad")};ImageButton("睡觉",AppState.petSleepUri){pick("sleep")};ImageButton("说话",AppState.petTalkUri){pick("talk")};ImageButton("惊讶",AppState.petSurpriseUri){pick("surprise")}}
                     }
                     Spacer(Modifier.height(12.dp));Card(shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(Color.White.copy(.9f))){Column(Modifier.padding(18.dp)){Text("Clawd MCP",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Ink);Text("不配置第二套 AI。Operit 里的 AI 直接通过 MCP 控制这个身体。",fontSize=12.sp,color=Ink.copy(.62f));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("启动本机 MCP");Switch(checked=serverEnabled,onCheckedChange={serverEnabled=it;AppState.mcpServerEnabled=it;if(it)startPet()else stopService(Intent(this@MainActivity,ClawdOverlayService::class.java))})};CopyField("HTTP MCP 地址",ClawdMcpServer.endpoint());CopyField("SSE 地址",ClawdMcpServer.sseEndpoint());Field("端口",port,editable=true){v->port=v.filter{it.isDigit()};v.toIntOrNull()?.takeIf{it in 1024..65535}?.let{AppState.mcpServerPort=it}};Field("Bearer Token（可选）",token,true,editable=true){token=it;AppState.mcpServerToken=it};Text(if(ClawdMcpServer.isRunning())"MCP 状态：运行中" else "MCP 状态：未启动",color=Rose,fontSize=12.sp);Spacer(Modifier.height(8.dp));Button(onClick={startPet()},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp),colors=ButtonDefaults.buttonColors(containerColor=Rose)){Text("开启桌面 Clawd")}}

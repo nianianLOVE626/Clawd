@@ -26,4 +26,5 @@ object AppState {
     var lastNotification: String get() = s().getString("lastNotification","") ?: ""; set(v)=s().edit().putString("lastNotification",v.take(2000)).apply()
 
     var ttsEnabled: Boolean get() = s().getBoolean("ttsEnabled",false); set(v)=s().edit().putBoolean("ttsEnabled",v).apply()
+    var petSizeDp: Int get() = s().getInt("petSizeDp",140); set(v)=s().edit().putInt("petSizeDp",v).apply()
 }
