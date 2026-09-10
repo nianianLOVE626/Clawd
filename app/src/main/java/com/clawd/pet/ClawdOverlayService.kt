@@ -85,7 +85,7 @@ class ClawdOverlayService : Service() {
 
     private fun showPet() {
         val density = resources.displayMetrics.density
-        val petSizePx = (120 * density).toInt()
+        val petSizePx = (AppState.petSize.coerceIn(60, 200) * density).toInt()
 
         petRoot = FrameLayout(this)
         val avatar = ImageView(this).apply {
@@ -198,6 +198,8 @@ class ClawdOverlayService : Service() {
                     appendBubble(list, "assistant", reply)
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                     send.isEnabled = true
+                    // 桌宠头上弹小气泡
+                    showReplyBubble(reply)
                 }
             }
         }
@@ -236,6 +238,42 @@ class ClawdOverlayService : Service() {
         })
     }
 
+    // ========== 回复小气泡 ==========
+
+    private var replyBubble: LinearLayout? = null
+
+    private fun showReplyBubble(text: String) {
+        replyBubble?.let { runCatching { wm.removeView(it) } }
+        val density = resources.displayMetrics.density
+        val maxW = (220 * density).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((12 * density).toInt(), (8 * density).toInt(), (12 * density).toInt(), (8 * density).toInt())
+            background = bg(Color.argb(248, 255, 249, 252), 20f * density)
+            elevation = 6f
+        }
+        val body = TextView(this).apply {
+            this.text = if (text.length > 80) text.take(80) + "…" else text
+            textSize = 13f; setTextColor(Color.rgb(82, 63, 73))
+            maxLines = 4
+        }
+        root.addView(body)
+        root.setOnClickListener { toggleChat() }
+
+        val type = if (android.os.Build.VERSION.SDK_INT >= 26)
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else WindowManager.LayoutParams.TYPE_PHONE
+        val lp = WindowManager.LayoutParams(
+            maxW, WindowManager.LayoutParams.WRAP_CONTENT, type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = (50 * density).toInt(); y = (60 * density).toInt() }
+
+        wm.addView(root, lp)
+        replyBubble = root
+        main.postDelayed({ replyBubble?.let { if (it === root) { runCatching { wm.removeView(it) }; replyBubble = null } } }, 8000)
+    }
+
     // ========== 主动陪伴气泡 ==========
 
     private fun showProactive(text: String) {
@@ -260,6 +298,7 @@ class ClawdOverlayService : Service() {
     override fun onDestroy() {
         if (::petRoot.isInitialized) runCatching { wm.removeView(petRoot) }
         dismissChat()
+        replyBubble?.let { runCatching { wm.removeView(it) } }
         bubbleRoot?.let { runCatching { wm.removeView(it) } }
         io.shutdownNow()
         if (::visionCompanion.isInitialized) visionCompanion.stop()

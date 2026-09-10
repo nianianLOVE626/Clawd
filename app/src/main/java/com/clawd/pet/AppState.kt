@@ -33,4 +33,5 @@ object AppState {
     var proactiveCooldownMin: Int get() = s().getInt("proactiveCooldownMin",30); set(v)=s().edit().putInt("proactiveCooldownMin",v).apply()
 
     var petImagePath: String get() = s().getString("petImagePath","") ?: ""; set(v)=s().edit().putString("petImagePath",v).apply()
+    var petSize: Int get() = s().getInt("petSize",120); set(v)=s().edit().putInt("petSize",v).apply()
 }

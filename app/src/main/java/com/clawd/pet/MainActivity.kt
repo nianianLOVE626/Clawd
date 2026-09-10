@@ -187,6 +187,13 @@ class MainActivity:ComponentActivity(){
                     }
                     Spacer(Modifier.height(12.dp))
                     Text("桌宠形象",fontWeight=FontWeight.Bold,fontSize=19.sp)
+                    Text("大小：${AppState.petSize}dp",fontSize=12.sp,color=Ink.copy(.62f))
+                    androidx.compose.material3.Slider(
+                        value=AppState.petSize.toFloat(),
+                        onValueChange={AppState.petSize=it.toInt()},
+                        valueRange=60f..200f,
+                        steps=6
+                    )
                     Text(if(AppState.petImagePath.isNotBlank())"已选择自定义形象" else "使用默认形象",fontSize=12.sp,color=Ink.copy(.62f))
                     OutlinedButton(onClick={pickImage()},modifier=Modifier.fillMaxWidth(),
                         shape=RoundedCornerShape(18.dp)){Text("从相册选择形象")}
