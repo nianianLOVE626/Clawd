@@ -2,309 +2,290 @@ package com.clawd.pet
 
 import android.app.*
 import android.content.*
-import android.graphics.Color
-import android.graphics.PixelFormat
+import android.graphics.*
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.*
 import android.provider.Settings
 import android.view.*
 import android.widget.*
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import java.util.concurrent.Executors
 
-class ClawdOverlayService : Service() {
+class ClawdOverlayService: Service() {
     private lateinit var wm: WindowManager
     private lateinit var petRoot: FrameLayout
-    private val io = Executors.newSingleThreadExecutor()
-    private lateinit var visionCompanion: VisionCompanion
-    private var chatRoot: LinearLayout? = null
-    private var chatParams: WindowManager.LayoutParams? = null
-    private var bubbleRoot: LinearLayout? = null
-    private val main = Handler(Looper.getMainLooper())
+    private lateinit var visual: View
+    private lateinit var status: TextView
+    private var bubbleRoot: View? = null
+    private var chatRoot: View? = null
+    private var chatScale = 1f
+    private val main=Handler(Looper.getMainLooper())
 
-    private fun bg(color: Int, radius: Float) = GradientDrawable().apply {
-        setColor(color); cornerRadius = radius
+    private fun bg(color:Int,r:Float)=GradientDrawable().apply{setColor(color);cornerRadius=r}
+
+    override fun onCreate(){
+        super.onCreate(); AppState.init(this); startForeground(1004,notification())
+        ClawdPetController.attach(this)
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        AppState.init(this)
-        startForeground(1004, notification())
-        if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) return
-        wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        showPet()
-        visionCompanion = VisionCompanion(this) { showProactive(it) }
-        visionCompanion.start()
+    override fun onStartCommand(intent:Intent?, flags:Int, startId:Int):Int {
+        if(Build.VERSION.SDK_INT>=23 && !Settings.canDrawOverlays(this)){
+            stopSelf(); return START_NOT_STICKY
+        }
+        if(!::wm.isInitialized) wm=getSystemService(WINDOW_SERVICE) as WindowManager
+        if(!::petRoot.isInitialized) showPet()
+        ClawdPetController.attach(this)
+        if(AppState.mcpServerEnabled && !ClawdMcpServer.isRunning()) ClawdMcpServer.start(this)
+        return START_STICKY
     }
 
-    private fun notification(): Notification {
-        val id = "clawd"
-        val n = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26) n.createNotificationChannel(
-            NotificationChannel(id, "Clawd 常驻陪伴", NotificationManager.IMPORTANCE_LOW)
-        )
-        return Notification.Builder(this, id)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Clawd 正在陪着你")
-            .setContentText("悬浮陪伴与智能视觉正在运行")
-            .setOngoing(true).build()
+    private fun notification():Notification{
+        val id="clawd"; val nm=getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if(Build.VERSION.SDK_INT>=26) nm.createNotificationChannel(NotificationChannel(id,"Clawd 常驻陪伴",NotificationManager.IMPORTANCE_LOW))
+        return Notification.Builder(this,id).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Clawd 正在陪着你").setContentText("Operit AI 的虚拟身体正在运行").setOngoing(true).build()
     }
 
-    private fun petLp(x: Int = 42, y: Int = 180): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= 26)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else WindowManager.LayoutParams.TYPE_PHONE
-        return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT, type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; this.x = x; this.y = y }
+    private fun lp(x:Int=42,y:Int=180)=WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,
+        if(Build.VERSION.SDK_INT>=26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT).apply{gravity=Gravity.TOP or Gravity.START;this.x=x;this.y=y}
+
+    private fun showPet(){
+        // Pet body, speech bubble and status are intentionally kept inside ONE
+        // WindowManager overlay. Moving the body therefore moves everything
+        // together instead of leaving the bubble behind at a fixed screen point.
+        petRoot=FrameLayout(this).apply{
+            setPadding(0,0,0,0)
+            setBackgroundColor(Color.TRANSPARENT)
+            clipChildren=false
+            clipToPadding=false
+        }
+        visual=createVisual()
+        petRoot.addView(visual,FrameLayout.LayoutParams(170,170).apply{
+            gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        })
+        status=TextView(this).apply{
+            setTextColor(Color.rgb(145,110,128))
+            textSize=10f
+            gravity=Gravity.CENTER
+            setPadding(4,0,4,4)
+            text="Clawd · 待机"
+        }
+        petRoot.addView(status,FrameLayout.LayoutParams(170,28).apply{
+            gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            bottomMargin=0
+        })
+        // The root is deliberately larger than the image so the bubble can
+        // live above the pet without requiring a second overlay window.
+        val params=lp()
+        params.width=220
+        params.height=300
+        attachPetTouch(visual, params)
+        wm.addView(petRoot,params)
     }
 
-    /** 聊天面板用可聚焦的参数，这样 EditText 能弹键盘 */
-    private fun chatLp(): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= 26)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else WindowManager.LayoutParams.TYPE_PHONE
-        val dm = resources.displayMetrics
-        val w = (dm.widthPixels * 0.88).toInt()
-        val h = (dm.heightPixels * 0.55).toInt()
-        return WindowManager.LayoutParams(w, h, type,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.CENTER
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+    private fun createVisual():View{
+        val uri=uriForCurrentState()
+        if(uri.isNotBlank()) return ImageView(this).apply{
+            isClickable=true
+            isFocusable=false
+            val bmp=runCatching{contentResolver.openInputStream(Uri.parse(uri)).use{BitmapFactory.decodeStream(it)}}.getOrNull()
+            if(bmp!=null)setImageBitmap(bmp) else setImageResource(android.R.drawable.ic_menu_gallery)
+            scaleType=ImageView.ScaleType.CENTER_INSIDE;setPadding(8,8,8,8)
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+        return CutePetView(this)
+    }
+
+    private fun uriForCurrentState():String{
+        val m=ClawdPetController.lastMood.lowercase();val a=ClawdPetController.lastAction.lowercase()
+        return when{
+            m.contains("sleep")||m.contains("困")||a.contains("sleep")->AppState.petSleepUri
+            m.contains("sad")||m.contains("难过")->AppState.petSadUri
+            m.contains("surprise")||m.contains("惊")->AppState.petSurpriseUri
+            a.contains("talk")||a.contains("说")||m.contains("talk")->AppState.petTalkUri
+            m.contains("happy")||m.contains("开心")||m.contains("高兴")->AppState.petHappyUri
+            else->AppState.petImageUri
         }
     }
 
-    // ========== 桌宠形象 ==========
-
-    private fun showPet() {
-        val density = resources.displayMetrics.density
-        val petSizePx = (AppState.petSize.coerceIn(60, 200) * density).toInt()
-
-        petRoot = FrameLayout(this)
-        val avatar = ImageView(this).apply {
-            val customPath = AppState.petImagePath
-            if (customPath.isNotBlank()) {
-                val f = java.io.File(customPath)
-                if (f.exists()) {
-                    setImageURI(android.net.Uri.fromFile(f))
-                } else {
-                    setImageResource(R.drawable.clawd_pet)
+    private fun attachPetTouch(target:View, params:WindowManager.LayoutParams){
+        target.setOnTouchListener(object:View.OnTouchListener{
+            var dx=0;var dy=0;var sx=0;var sy=0;var moved=false
+            override fun onTouch(v:View,e:MotionEvent):Boolean=when(e.actionMasked){
+                MotionEvent.ACTION_DOWN->{dx=e.rawX.roundToInt();dy=e.rawY.roundToInt();sx=params.x;sy=params.y;moved=false;true}
+                MotionEvent.ACTION_MOVE->{
+                    val mx=e.rawX.roundToInt()-dx
+                    val my=e.rawY.roundToInt()-dy
+                    if(abs(mx)>8||abs(my)>8)moved=true
+                    params.x=sx+mx
+                    params.y=sy+my
+                    runCatching{wm.updateViewLayout(petRoot,params)}
+                    true
                 }
-            } else {
-                setImageResource(R.drawable.clawd_pet)
-            }
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        petRoot.addView(avatar, FrameLayout.LayoutParams(petSizePx, petSizePx))
-
-        val params = petLp()
-
-        petRoot.setOnTouchListener(object : View.OnTouchListener {
-            var dx = 0; var dy = 0; var sx = 0; var sy = 0; var moved = false
-            override fun onTouch(v: View, e: MotionEvent): Boolean {
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        dx = e.rawX.roundToInt(); dy = e.rawY.roundToInt()
-                        sx = params.x; sy = params.y; moved = false
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val mx = e.rawX.roundToInt() - dx; val my = e.rawY.roundToInt() - dy
-                        if (abs(mx) > 18 || abs(my) > 18) moved = true
-                        if (moved) { params.x = sx + mx; params.y = sy + my; wm.updateViewLayout(petRoot, params) }
-                    }
-                    MotionEvent.ACTION_UP -> { if (!moved) toggleChat() }
-                }
-                return true
+                MotionEvent.ACTION_UP->{if(!moved)openChatPanel();true}
+                else->true
             }
         })
-        wm.addView(petRoot, params)
     }
 
-    // ========== 聊天面板 ==========
-
-    private fun toggleChat() {
-        if (chatRoot != null) { dismissChat(); return }
-
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 16)
-            background = bg(Color.argb(252, 255, 249, 252), 38f)
-            elevation = 12f
+    private fun refreshVisual(){
+        if(!::petRoot.isInitialized)return
+        val index=petRoot.indexOfChild(visual)
+        if(index<0)return
+        val old=visual
+        val next=createVisual()
+        visual=next
+        val lp=FrameLayout.LayoutParams(170,170).apply{
+            gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         }
+        petRoot.removeView(old)
+        petRoot.addView(next,index,lp)
+        val windowParams=petRoot.layoutParams as? WindowManager.LayoutParams
+        if(windowParams!=null)attachPetTouch(next,windowParams)
+    }
 
-        // 顶栏：标题 + 关闭
-        val topBar = LinearLayout(this).apply {
+    fun setPetMood(mood:String){status.text="心情：$mood";refreshVisual()}
+    fun setPetAction(action:String){status.text="动作：$action";refreshVisual()}
+
+    private fun dp(v: Float): Int = (v * resources.displayMetrics.density).roundToInt()
+
+    /** Opens a real interactive chat panel beside the pet. Its size is independent
+     *  from the pet image: plus/minus buttons and pinch gesture change only the
+     *  panel scale, never the character. */
+    fun openChatPanel() {
+        if(!::petRoot.isInitialized) return
+        chatRoot?.let { petRoot.removeView(it) }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14f),dp(12f),dp(14f),dp(12f))
+            background = bg(Color.argb(248,255,249,252),30f)
+            elevation = dp(8f).toFloat()
+            isClickable = true
+            isFocusable = true
+        }
+        val titleRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val title = TextView(this).apply {
-            this.text = "Clawd"
-            textSize = 20f; setTextColor(Color.rgb(92, 65, 77))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-        val closeBtn = TextView(this).apply {
-            this.text = "✕"; textSize = 18f; setTextColor(Color.rgb(180, 140, 160))
-            setPadding(16, 0, 0, 0)
-            setOnClickListener { dismissChat() }
-        }
-        topBar.addView(title, LinearLayout.LayoutParams(0, -2).apply { weight = 1f })
-        topBar.addView(closeBtn)
-        root.addView(topBar)
+        titleRow.addView(TextView(this).apply {
+            text = "Clawd"
+            textSize = 16f
+            setTextColor(Color.rgb(170,105,135))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0,dp(30f),1f))
+        val minus = Button(this).apply { text="−"; setTextSize(16f); setOnClickListener{setChatScale(chatScale-0.1f)} }
+        val plus = Button(this).apply { text="＋"; setTextSize(16f); setOnClickListener{setChatScale(chatScale+0.1f)} }
+        titleRow.addView(minus,LinearLayout.LayoutParams(dp(42f),dp(38f)))
+        titleRow.addView(plus,LinearLayout.LayoutParams(dp(42f),dp(38f)))
+        panel.addView(titleRow)
 
-        // 消息列表
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val scroll = ScrollView(this).apply { addView(list); isFillViewport = true }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0).apply { weight = 1f; topMargin = 12 })
-
-        // 输入栏
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 12, 0, 0)
+        val history = TextView(this).apply {
+            text = if(ClawdPetController.lastMessage.isBlank()) "在这里和 Clawd 聊天。\n你也可以让 Operit 通过 MCP 让 Clawd 回复。" else ClawdPetController.lastMessage
+            textSize = 14f
+            setTextColor(Color.rgb(82,63,73))
+            setPadding(0,dp(6f),0,dp(8f))
+            setBackgroundColor(Color.TRANSPARENT)
         }
+        panel.addView(history,LinearLayout.LayoutParams(-1,dp(100f)))
+
+        val inputRow = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
         val input = EditText(this).apply {
-            hint = "说点什么…"; setTextColor(Color.rgb(80, 62, 72)); setHintTextColor(Color.rgb(180, 160, 170))
-            background = bg(Color.argb(235, 247, 237, 243), 26f); setPadding(20, 14, 20, 14)
-            isFocusable = true; isFocusableInTouchMode = true; maxLines = 3
-            textSize = 15f
+            hint="和 Clawd 说点什么…"
+            textSize=14f
+            singleLine=false
+            maxLines=3
+            setPadding(dp(12f),dp(8f),dp(12f),dp(8f))
+            background=bg(Color.argb(220,255,255,255),24f)
         }
-        val send = Button(this).apply {
-            this.text = "发送"; background = bg(Color.rgb(224, 150, 176), 24f); setTextColor(Color.WHITE)
-            textSize = 14f; setPadding(16, 0, 16, 0)
-        }
-        row.addView(input, LinearLayout.LayoutParams(0, -2).apply { weight = 1f })
-        row.addView(send, LinearLayout.LayoutParams(-2, (44 * resources.displayMetrics.density).toInt()).apply { leftMargin = 10 })
-        root.addView(row)
-
-        // 加载历史
-        ClawdChatStore.load(this).takeLast(12).forEach { appendBubble(list, it.role, it.text) }
-
-        // 发送
-        send.setOnClickListener {
-            val text = input.text.toString().trim()
-            if (text.isBlank()) return@setOnClickListener
-            input.setText("")
-            appendBubble(list, "user", text)
-            send.isEnabled = false
-            scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-            ClawdConversation.send(this@ClawdOverlayService, text) { reply ->
-                main.post {
-                    appendBubble(list, "assistant", reply)
-                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-                    send.isEnabled = true
-                    // 桌宠头上弹小气泡（仅面板关闭时）
-                    if (chatRoot == null) showReplyBubble(reply)
+        inputRow.addView(input,LinearLayout.LayoutParams(0,dp(52f),1f))
+        inputRow.addView(Button(this).apply {
+            text="发送"
+            setOnClickListener {
+                val text=input.text.toString().trim()
+                if(text.isNotBlank()) {
+                    ClawdPetController.lastMessage=text
+                    ClawdPetController.lastUpdatedAt=System.currentTimeMillis()
+                    history.text="你：$text\n\n已发送给 Clawd。\n（AI 回复仍由 Operit MCP 负责。）"
+                    input.text.clear()
                 }
             }
-        }
+        },LinearLayout.LayoutParams(dp(68f),dp(52f)))
+        panel.addView(inputRow)
 
-        val cp = chatLp()
-        wm.addView(root, cp)
-        chatRoot = root
-        chatParams = cp
-        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-
-        // 点击面板外部关闭
-        root.setOnTouchListener { _, event ->
-            if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) { dismissChat(); true }
-            else false
-        }
-    }
-
-    private fun dismissChat() {
-        chatRoot?.let { runCatching { wm.removeView(it) } }
-        chatRoot = null; chatParams = null
-    }
-
-    private fun appendBubble(list: LinearLayout, role: String, text: String) {
-        val density = resources.displayMetrics.density
-        val tv = TextView(this).apply {
-            this.text = text; textSize = 14f; setTextColor(Color.rgb(82, 63, 73))
-            setPadding(18, 14, 18, 14)
-            background = bg(
-                if (role == "user") Color.rgb(248, 235, 242) else Color.rgb(255, 255, 255), 22f
-            )
-        }
-        list.addView(tv, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = (6 * density).toInt()
-            leftMargin = if (role == "user") (50 * density).toInt() else 0
-            rightMargin = if (role == "user") 0 else (50 * density).toInt()
+        val gesture = android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
+            override fun onScale(detector: android.view.ScaleGestureDetector):Boolean {
+                setChatScale(chatScale * detector.scaleFactor)
+                return true
+            }
         })
-    }
-
-    // ========== 回复小气泡 ==========
-
-    private var replyBubble: LinearLayout? = null
-
-    private fun showReplyBubble(text: String) {
-        replyBubble?.let { runCatching { wm.removeView(it) } }
-        val density = resources.displayMetrics.density
-        val maxW = (220 * density).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((12 * density).toInt(), (8 * density).toInt(), (12 * density).toInt(), (8 * density).toInt())
-            background = bg(Color.argb(248, 255, 249, 252), 20f * density)
-            elevation = 6f
+        panel.setOnTouchListener { _, event ->
+            // Always feed the complete gesture stream so ScaleGestureDetector
+            // receives the initial ACTION_DOWN before the second finger arrives.
+            gesture.onTouchEvent(event)
+            event.pointerCount >= 2
         }
-        val body = TextView(this).apply {
-            this.text = if (text.length > 80) text.take(80) + "…" else text
-            textSize = 13f; setTextColor(Color.rgb(82, 63, 73))
-            maxLines = 4
+        val lp = FrameLayout.LayoutParams(dp(330f),dp(250f)).apply {
+            gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin=dp(10f)
         }
-        root.addView(body)
-        root.setOnClickListener { toggleChat() }
-
-        val type = if (android.os.Build.VERSION.SDK_INT >= 26)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else WindowManager.LayoutParams.TYPE_PHONE
-        val lp = WindowManager.LayoutParams(
-            maxW, WindowManager.LayoutParams.WRAP_CONTENT, type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; x = (20 * density).toInt(); y = (240 * density).toInt() }
-
-        wm.addView(root, lp)
-        replyBubble = root
-        main.postDelayed({ replyBubble?.let { if (it === root) { runCatching { wm.removeView(it) }; replyBubble = null } } }, 8000)
+        petRoot.addView(panel,lp)
+        chatRoot=panel
+        panel.bringToFront()
+        setChatScale(chatScale)
     }
 
-    // ========== 主动陪伴气泡 ==========
+    private fun setChatScale(value:Float) {
+        chatScale=value.coerceIn(0.65f,1.7f)
+        chatRoot?.animate()?.scaleX(chatScale)?.scaleY(chatScale)?.setDuration(80)?.start()
+    }
 
-    private fun showProactive(text: String) {
-        if (!AppState.proactiveEnabled) return
-        bubbleRoot?.let { runCatching { wm.removeView(it) } }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(18, 14, 18, 14)
-            background = bg(Color.argb(250, 255, 249, 252), 28f)
-            elevation = 8f
+    fun showMcpSpeech(text:String,seconds:Int=10){
+        if(!::petRoot.isInitialized)return
+        // Bubble is a child of petRoot, so it follows the same WindowManager
+        // position as the character during dragging.
+        bubbleRoot?.let{petRoot.removeView(it)}
+        val root=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL
+            setPadding(16,12,16,12)
+            background=bg(Color.argb(248,255,249,252),30f)
+            elevation=8f
         }
-        val label = TextView(this).apply { this.text = "Clawd"; textSize = 11f; setTextColor(Color.rgb(210, 125, 157)) }
-        val body = TextView(this).apply { this.text = text; textSize = 14f; setTextColor(Color.rgb(82, 63, 73)) }
-        root.addView(label); root.addView(body)
-        body.setOnClickListener { toggleChat() }
-        wm.addView(root, petLp(320, 155))
-        bubbleRoot = root
-        main.postDelayed({ if (bubbleRoot === root) { runCatching { wm.removeView(root) }; bubbleRoot = null } }, 12000)
+        root.addView(TextView(this).apply{
+            this.text="Clawd"
+            textSize=11f
+            setTextColor(Color.rgb(210,125,157))
+        })
+        root.addView(TextView(this).apply{
+            this.text=text
+            textSize=14f
+            setTextColor(Color.rgb(82,63,73))
+            setPadding(0,5,0,0)
+        })
+        root.setOnClickListener{petRoot.removeView(root);if(bubbleRoot===root)bubbleRoot=null}
+        val bubbleLp=FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply{
+            gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin=8
+            leftMargin=8
+            rightMargin=8
+        }
+        petRoot.addView(root,bubbleLp)
+        bubbleRoot=root
+        main.postDelayed({
+            if(bubbleRoot===root){
+                petRoot.removeView(root)
+                bubbleRoot=null
+            }
+        },seconds.coerceIn(2,60)*1000L)
     }
 
-    // ========== 生命周期 ==========
-
-    override fun onDestroy() {
-        if (::petRoot.isInitialized) runCatching { wm.removeView(petRoot) }
-        dismissChat()
-        replyBubble?.let { runCatching { wm.removeView(it) } }
-        bubbleRoot?.let { runCatching { wm.removeView(it) } }
-        io.shutdownNow()
-        if (::visionCompanion.isInitialized) visionCompanion.stop()
-        ScreenVision.stop()
-        super.onDestroy()
+    override fun onDestroy(){
+        if(::petRoot.isInitialized)remove(petRoot);bubbleRoot=null;chatRoot=null;ClawdPetController.detach(this);ClawdMcpServer.stop();super.onDestroy()
     }
-
-    override fun onBind(intent: Intent?) = null
+    override fun onBind(intent:Intent?)=null
 }
