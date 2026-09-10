@@ -192,7 +192,7 @@ class ClawdOverlayService:Service() {
         val block=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         block.addView(tv)
         if(role=="assistant" && cacheHitRate>0){
-            val cache=TextView(this).apply{text=CacheTracker.label(cacheHitRate);textSize=10f;setTextColor(Color.rgb(171,116,139));setPadding(10,3,10,0)}
+            val cache=TextView(this).apply{this.text=CacheTracker.label(cacheHitRate);textSize=10f;setTextColor(Color.rgb(171,116,139));setPadding(10,3,10,0)}
             block.addView(cache)
         }
         list.addView(block,LinearLayout.LayoutParams(-1,-2).apply{
@@ -207,8 +207,8 @@ class ClawdOverlayService:Service() {
             orientation=LinearLayout.VERTICAL;setPadding(15,12,15,12)
             background=bg(Color.argb(250,255,249,252),30f)
         }
-        val label=TextView(this).apply{text="Clawd";textSize=11f;setTextColor(Color.rgb(210,125,157))}
-        val body=TextView(this).apply{text=text;textSize=14f;setTextColor(Color.rgb(82,63,73))}
+        val label=TextView(this).apply{this.text="Clawd";textSize=11f;setTextColor(Color.rgb(210,125,157))}
+        val body=TextView(this).apply{this.text=text;textSize=14f;setTextColor(Color.rgb(82,63,73))}
         root.addView(label);root.addView(body)
         body.setOnClickListener{showChat()}
         addOverlay(root,320,155)

@@ -27,8 +27,7 @@ ${memoryResult.take(6000)}
 $history"""
 
             val reply=ChatApi.chat(context,userText,system,historyItems)
-                .getOrElse { "我现在没连上 AI：${it.message}" }
-                .text
+                .fold({ it.text }, { "我现在没连上 AI：${it.message}" })
 
             ClawdChatStore.append(context,"assistant",reply)
 

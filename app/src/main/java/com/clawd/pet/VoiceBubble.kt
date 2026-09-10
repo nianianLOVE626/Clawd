@@ -12,8 +12,8 @@ import java.io.File
 object VoiceBubble {
     fun render(context:Context,text:String,onRemove:()->Unit):LinearLayout{
         val box=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(14,10,14,10)}
-        val play=Button(context).apply{text="播放";setTextColor(Color.WHITE);setBackgroundColor(Color.rgb(216,143,170))}
-        val label=TextView(context).apply{text="语音 · ${text.take(24)}";textSize=13f;setTextColor(Color.rgb(90,70,80));setPadding(12,0,0,0)}
+        val play=Button(context).apply{this.text="播放";setTextColor(Color.WHITE);setBackgroundColor(Color.rgb(216,143,170))}
+        val label=TextView(context).apply{this.text="语音 · ${text.take(24)}";textSize=13f;setTextColor(Color.rgb(90,70,80));setPadding(12,0,0,0)}
         box.addView(play,LinearLayout.LayoutParams(76,50));box.addView(label,LinearLayout.LayoutParams(0,50).apply{weight=1f})
         play.setOnClickListener{
             play.isEnabled=false
