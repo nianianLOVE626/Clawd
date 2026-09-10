@@ -68,7 +68,8 @@ class MainActivity:ComponentActivity(){
         var mcpTools by remember{mutableStateOf(0)}
         MaterialTheme(colorScheme=lightColorScheme(primary=Rose,background=Cream,onBackground=Ink)){
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Cream,Lilac)))){
-                Column(Modifier.fillMaxSize().padding(20.dp)){
+                androidx.compose.foundation.rememberScrollState().let{ scrollState ->
+                Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(scrollState)){
                     Text("Clawd",fontSize=34.sp,fontWeight=FontWeight.Bold)
                     Text("soft companion · aware of your world",color=Rose)
                     Spacer(Modifier.height(18.dp))
@@ -190,6 +191,8 @@ class MainActivity:ComponentActivity(){
                     Spacer(Modifier.height(10.dp))
                     Text("Clawd 将把屏幕视觉、通知、时间、音乐状态统一作为感知输入；真正发送到视觉模型前还会加入采样频率、App 白名单与隐私过滤。",
                         fontSize=12.sp,color=Ink.copy(.55f))
+                    Spacer(Modifier.height(30.dp))
+                }
                 }
             }
         }

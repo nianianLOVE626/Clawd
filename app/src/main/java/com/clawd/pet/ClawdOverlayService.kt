@@ -87,7 +87,7 @@ class ClawdOverlayService:Service() {
                     MotionEvent.ACTION_DOWN->{dx=e.rawX.roundToInt();dy=e.rawY.roundToInt();sx=params.x;sy=params.y;moved=false}
                     MotionEvent.ACTION_MOVE->{
                         val mx=e.rawX.roundToInt()-dx;val my=e.rawY.roundToInt()-dy
-                        if(abs(mx)>8||abs(my)>8)moved=true
+                        if(abs(mx)>20||abs(my)>20)moved=true
                         params.x=sx+mx;params.y=sy+my
                         wm.updateViewLayout(petRoot,params)
                     }
