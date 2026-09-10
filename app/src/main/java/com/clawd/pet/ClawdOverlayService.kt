@@ -85,7 +85,7 @@ class ClawdOverlayService : Service() {
 
     private fun showPet() {
         val density = resources.displayMetrics.density
-        val petSizePx = (72 * density).toInt()
+        val petSizePx = (120 * density).toInt()
 
         petRoot = FrameLayout(this)
         val avatar = ImageView(this).apply {
