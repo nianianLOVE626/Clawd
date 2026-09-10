@@ -31,4 +31,6 @@ object AppState {
 
     var proactiveEnabled: Boolean get() = s().getBoolean("proactiveEnabled",true); set(v)=s().edit().putBoolean("proactiveEnabled",v).apply()
     var proactiveCooldownMin: Int get() = s().getInt("proactiveCooldownMin",30); set(v)=s().edit().putInt("proactiveCooldownMin",v).apply()
+
+    var petImagePath: String get() = s().getString("petImagePath","") ?: ""; set(v)=s().edit().putString("petImagePath",v).apply()
 }

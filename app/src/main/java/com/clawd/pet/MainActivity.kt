@@ -46,6 +46,22 @@ class MainActivity:ComponentActivity(){
     }
     private fun notifications(){startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))}
 
+    private val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        // 复制到app私有目录
+        val dest = java.io.File(filesDir, "pet_custom.png")
+        contentResolver.openInputStream(uri)?.use { input ->
+            dest.outputStream().use { output -> input.copyTo(output) }
+        }
+        AppState.petImagePath = dest.absolutePath
+    }
+
+    private fun pickImage() {
+        imagePickerLauncher.launch("image/*")
+    }
+
     @Composable fun Screen(){
         var chatProvider by remember{mutableStateOf(AppState.chatProvider)}
         var url by remember{mutableStateOf(AppState.apiUrl)}
@@ -168,6 +184,15 @@ class MainActivity:ComponentActivity(){
                         Switch(checked = proactive, onCheckedChange = {
                             proactive = it; AppState.proactiveEnabled = it
                         })
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("桌宠形象",fontWeight=FontWeight.Bold,fontSize=19.sp)
+                    Text(if(AppState.petImagePath.isNotBlank())"已选择自定义形象" else "使用默认形象",fontSize=12.sp,color=Ink.copy(.62f))
+                    OutlinedButton(onClick={pickImage()},modifier=Modifier.fillMaxWidth(),
+                        shape=RoundedCornerShape(18.dp)){Text("从相册选择形象")}
+                    if(AppState.petImagePath.isNotBlank()){
+                        OutlinedButton(onClick={AppState.petImagePath=""},modifier=Modifier.fillMaxWidth(),
+                            shape=RoundedCornerShape(18.dp)){Text("恢复默认形象")}
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -89,7 +89,17 @@ class ClawdOverlayService : Service() {
 
         petRoot = FrameLayout(this)
         val avatar = ImageView(this).apply {
-            setImageResource(R.drawable.clawd_pet)
+            val customPath = AppState.petImagePath
+            if (customPath.isNotBlank()) {
+                val f = java.io.File(customPath)
+                if (f.exists()) {
+                    setImageURI(android.net.Uri.fromFile(f))
+                } else {
+                    setImageResource(R.drawable.clawd_pet)
+                }
+            } else {
+                setImageResource(R.drawable.clawd_pet)
+            }
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         petRoot.addView(avatar, FrameLayout.LayoutParams(petSizePx, petSizePx))
